@@ -63,28 +63,32 @@ def init_db():
             order += 1
         conn.commit()
 
-    # If no tabs exist, seed with defaults
+    # If no tabs exist, seed with defaults from seed_data.py
     tab_count = conn.execute("SELECT COUNT(*) FROM tabs").fetchone()[0]
     if tab_count == 0:
-        # Create default tab
-        conn.execute("INSERT INTO tabs (name, sort_order) VALUES (?, ?)", ("Main", 0))
-        conn.commit()
-        tab_id = conn.execute("SELECT id FROM tabs WHERE name = 'Main'").fetchone()[0]
+        from seed_data import DEFAULT_TABS, DEFAULT_WATCHLIST
 
-        defaults = [
-            ("SPY", "S&P 500 ETF"),
-            ("QQQ", "Nasdaq 100 ETF"),
-            ("IWM", "Russell 2000 ETF"),
-            ("EFA", "EAFE ETF"),
-            ("EEM", "Emerging Markets ETF"),
-            ("TLT", "20+ Year Treasury ETF"),
-            ("GLD", "Gold ETF"),
-            ("VTI", "Total Stock Market ETF"),
-        ]
-        conn.executemany(
-            "INSERT OR IGNORE INTO watchlist (tab_id, ticker, name) VALUES (?, ?, ?)",
-            [(tab_id, t, n) for t, n in defaults],
-        )
+        # Create all default tabs
+        for tab_def in DEFAULT_TABS:
+            conn.execute(
+                "INSERT INTO tabs (name, sort_order) VALUES (?, ?)",
+                (tab_def["name"], tab_def["sort_order"]),
+            )
+        conn.commit()
+
+        # Add tickers to each tab
+        tabs = conn.execute("SELECT id, name FROM tabs").fetchall()
+        tab_map = {row["name"]: row["id"] for row in tabs}
+
+        for tab_name, tickers in DEFAULT_WATCHLIST.items():
+            tab_id = tab_map.get(tab_name)
+            if not tab_id:
+                continue
+            for order, (ticker, name) in enumerate(tickers):
+                conn.execute(
+                    "INSERT OR IGNORE INTO watchlist (tab_id, ticker, name, sort_order) VALUES (?, ?, ?, ?)",
+                    (tab_id, ticker, name, order),
+                )
         conn.commit()
 
     conn.close()
