@@ -469,8 +469,11 @@ function startCountdown() {
         }
         var mins = Math.floor(countdownSeconds / 60);
         var secs = countdownSeconds % 60;
-        document.getElementById('countdown').textContent =
-            (mins < 10 ? '0' : '') + mins + ':' + (secs < 10 ? '0' : '') + secs;
+        var timeStr = (mins < 10 ? '0' : '') + mins + ':' + (secs < 10 ? '0' : '') + secs;
+        document.getElementById('countdown').textContent = timeStr;
+        // Update mobile countdown too
+        var mobileCountdown = document.getElementById('countdown-mobile');
+        if (mobileCountdown) mobileCountdown.textContent = timeStr;
     }, 1000);
 }
 
@@ -788,6 +791,24 @@ function deleteCurrentTab() {
     })
     .catch(function(err) { console.error('Delete tab error:', err); });
 }
+
+// ── Responsive chart resize ────────────────────────────────────────────────
+
+var resizeTimeout = null;
+window.addEventListener('resize', function() {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(function() {
+        if (chart) {
+            var container = document.getElementById('chart-container');
+            if (container) {
+                chart.applyOptions({
+                    width: container.clientWidth,
+                    height: container.clientHeight,
+                });
+            }
+        }
+    }, 150);
+});
 
 // ── Init ───────────────────────────────────────────────────────────────────
 

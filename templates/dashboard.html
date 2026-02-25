@@ -75,6 +75,50 @@
         .drag-handle { cursor: grab; opacity: 0; transition: opacity 0.15s; }
         .drag-handle:active { cursor: grabbing; }
         .ticker-card:hover .drag-handle { opacity: 1; }
+
+        /* ── Mobile Responsive ────────────────────────────── */
+
+        /* Mobile: horizontal ticker strip */
+        @media (max-width: 1023px) {
+            .ticker-list-mobile {
+                display: flex;
+                flex-direction: row;
+                overflow-x: auto;
+                gap: 0.5rem;
+                padding-bottom: 0.5rem;
+                max-height: none !important;
+                -webkit-overflow-scrolling: touch;
+                scroll-snap-type: x mandatory;
+            }
+            .ticker-list-mobile .ticker-card {
+                flex-shrink: 0;
+                width: 150px;
+                scroll-snap-align: start;
+            }
+            .ticker-list-mobile .drag-handle { display: none; }
+        }
+
+        /* Mobile: smaller chart */
+        @media (max-width: 640px) {
+            #chart-container { height: 300px !important; }
+        }
+        @media (min-width: 641px) and (max-width: 1023px) {
+            #chart-container { height: 400px !important; }
+        }
+
+        /* Period buttons horizontal scroll on mobile */
+        .period-scroll {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+        .period-scroll::-webkit-scrollbar { display: none; }
+
+        /* Touch-friendly: larger tap targets on mobile */
+        @media (max-width: 640px) {
+            .period-btn { min-width: 36px; min-height: 32px; }
+            .tab-button { min-height: 36px; }
+        }
     </style>
 </head>
 
@@ -82,17 +126,17 @@
 
     <!-- ─── Header ──────────────────────────────────────────────────────── -->
     <header class="bg-surface-2 border-b border-gray-800 sticky top-0 z-50">
-        <div class="max-w-[1600px] mx-auto px-4 py-3 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <div class="w-8 h-8 bg-accent rounded-lg flex items-center justify-center">
-                    <i data-lucide="activity" class="w-5 h-5 text-white"></i>
+        <div class="max-w-[1600px] mx-auto px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+                <div class="w-7 h-7 sm:w-8 sm:h-8 bg-accent rounded-lg flex items-center justify-center flex-shrink-0">
+                    <i data-lucide="activity" class="w-4 h-4 sm:w-5 sm:h-5 text-white"></i>
                 </div>
-                <h1 class="text-lg font-bold text-white">The One and Only Monitor</h1>
+                <h1 class="text-sm sm:text-lg font-bold text-white truncate">The One and Only Monitor</h1>
             </div>
 
-            <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2 sm:gap-4 flex-shrink-0">
                 <!-- Last updated + auto-refresh -->
-                <div class="flex items-center gap-3 text-xs text-gray-400">
+                <div class="hidden sm:flex items-center gap-3 text-xs text-gray-400">
                     <div class="pulse-dot" id="live-dot"></div>
                     <div class="flex items-center gap-1.5">
                         <span class="text-gray-500">Updated:</span>
@@ -102,21 +146,25 @@
                     <span class="text-gray-600">|</span>
                     <span>Next: <span id="countdown" class="mono text-gray-300">15:00</span></span>
                 </div>
+                <!-- Mobile: compact countdown only -->
+                <div class="flex sm:hidden items-center gap-1.5 text-[10px] text-gray-400">
+                    <div class="pulse-dot" id="live-dot-mobile" style="width:6px;height:6px;"></div>
+                    <span class="mono text-gray-300" id="countdown-mobile">15:00</span>
+                </div>
 
                 <!-- Refresh button -->
                 <button onclick="refreshAll()"
                         id="refresh-btn"
-                        class="flex items-center gap-1.5 px-3 py-1.5 bg-surface-3 hover:bg-surface-4 rounded-lg text-sm text-gray-300 hover:text-white transition">
-                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5" id="refresh-icon"></i>
-                    Refresh
+                        class="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 bg-surface-3 hover:bg-surface-4 rounded-lg text-xs sm:text-sm text-gray-300 hover:text-white transition">
+                    <i data-lucide="refresh-cw" class="w-3 h-3 sm:w-3.5 sm:h-3.5" id="refresh-icon"></i>
+                    <span class="hidden sm:inline">Refresh</span>
                 </button>
-
             </div>
         </div>
     </header>
 
     <!-- ─── Main Content ────────────────────────────────────────────────── -->
-    <main class="max-w-[1600px] mx-auto px-4 py-5">
+    <main class="max-w-[1600px] mx-auto px-3 sm:px-4 py-3 sm:py-5">
 
         <!-- ─── Tab Bar ─────────────────────────────────────────────────── -->
         <div class="flex items-center gap-1 mb-4 overflow-x-auto pb-1" id="tab-bar">
@@ -176,12 +224,12 @@
 
         <div class="flex gap-5 flex-col lg:flex-row">
 
-            <!-- ─── Left: Ticker Cards ────────────────────────────────── -->
+            <!-- ─── Left: Ticker Cards (horizontal on mobile, vertical sidebar on desktop) ── -->
             <div class="w-full lg:w-80 xl:w-96 flex-shrink-0">
                 <div class="flex items-center justify-between mb-2">
-                    <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Watchlist</h2>
+                    <h2 class="text-xs sm:text-sm font-semibold text-gray-400 uppercase tracking-wider">Watchlist</h2>
                     <div class="flex items-center gap-2">
-                        <span class="text-xs text-gray-600" id="card-count">{{ watchlist|length }} tickers</span>
+                        <span class="text-[10px] sm:text-xs text-gray-600" id="card-count">{{ watchlist|length }} tickers</span>
                         <button onclick="openSearchModal()"
                                 class="flex items-center gap-1 px-2 py-1 bg-accent hover:bg-blue-600 rounded-md text-xs text-white font-medium transition">
                             <i data-lucide="plus" class="w-3 h-3"></i>
@@ -189,7 +237,7 @@
                         </button>
                     </div>
                 </div>
-                <div class="space-y-1 max-h-[calc(100vh-240px)] overflow-y-auto pr-1" id="ticker-list">
+                <div class="space-y-1 max-h-[calc(100vh-240px)] overflow-y-auto pr-1 ticker-list-mobile" id="ticker-list">
                     {% for item in watchlist %}
                     {% set q = quotes.get(item.ticker, {}) %}
                     <div class="ticker-card bg-surface-2 rounded-md px-2.5 py-1.5 border border-gray-800 cursor-pointer relative group"
@@ -247,12 +295,12 @@
             <!-- ─── Right: Chart Area ─────────────────────────────────── -->
             <div class="flex-1 min-w-0">
                 <!-- Chart Header -->
-                <div class="bg-surface-2 rounded-t-lg border border-gray-800 border-b-0 px-4 py-3 flex items-center justify-between">
-                    <div>
-                        <h2 class="text-lg font-bold text-white" id="chart-ticker">SPY</h2>
-                        <span class="text-xs text-gray-500" id="chart-name">S&P 500 ETF</span>
-                    </div>
-                    <div class="flex items-center gap-4">
+                <div class="bg-surface-2 rounded-t-lg border border-gray-800 border-b-0 px-3 sm:px-4 py-2 sm:py-3">
+                    <div class="flex items-center justify-between mb-2 sm:mb-0">
+                        <div>
+                            <h2 class="text-base sm:text-lg font-bold text-white" id="chart-ticker">SPY</h2>
+                            <span class="text-[10px] sm:text-xs text-gray-500" id="chart-name">S&P 500 ETF</span>
+                        </div>
                         <!-- Chart type toggle -->
                         <div class="flex items-center gap-1 bg-surface-3 rounded-md p-0.5">
                             <button onclick="setChartType('candlestick')" id="btn-candlestick"
@@ -264,8 +312,10 @@
                                 <i data-lucide="trending-up" class="w-3.5 h-3.5"></i>
                             </button>
                         </div>
-                        <!-- Period selector -->
-                        <div class="flex items-center gap-1 bg-surface-3 rounded-md p-0.5">
+                    </div>
+                    <!-- Period selector — scrollable on mobile -->
+                    <div class="period-scroll">
+                        <div class="flex items-center gap-1 bg-surface-3 rounded-md p-0.5 w-max sm:w-auto">
                             <button onclick="setPeriod('1d','5m')" class="period-btn px-2.5 py-1 rounded text-xs font-medium text-gray-400 hover:text-white" data-period="1d">1D</button>
                             <button onclick="setPeriod('5d','15m')" class="period-btn px-2.5 py-1 rounded text-xs font-medium text-gray-400 hover:text-white" data-period="5d">5D</button>
                             <button onclick="setPeriod('1mo','1d')" class="period-btn active px-2.5 py-1 rounded text-xs font-medium" data-period="1mo">1M</button>
@@ -283,7 +333,7 @@
                 </div>
 
                 <!-- Detail stats -->
-                <div class="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-9 gap-2 mt-4" id="detail-stats">
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-9 gap-1.5 sm:gap-2 mt-3 sm:mt-4" id="detail-stats">
                     <div class="bg-surface-2 rounded-lg px-2.5 py-2.5 border border-gray-800 overflow-hidden min-w-0">
                         <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Open</div>
                         <div class="mono text-xs sm:text-sm text-gray-200 truncate" id="stat-open">-</div>
@@ -349,9 +399,9 @@
 
     <!-- ─── Search / Add Ticker Modal ───────────────────────────────────── -->
     <div id="search-modal"
-         class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 items-start justify-center pt-[15vh]"
+         class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 items-start justify-center pt-[8vh] sm:pt-[15vh]"
          style="display: none;">
-        <div class="bg-surface-2 rounded-xl border border-gray-700 shadow-2xl w-full max-w-md mx-4">
+        <div class="bg-surface-2 rounded-xl border border-gray-700 shadow-2xl w-full max-w-md mx-3 sm:mx-4">
             <!-- Search input -->
             <div class="p-4 border-b border-gray-800">
                 <div class="relative">
