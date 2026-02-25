@@ -204,10 +204,21 @@ function selectTicker(ticker) {
         card.style.boxShadow = '0 0 0 2px #3b82f6';
     }
 
-    // Update chart header
+    // Update chart header — prefer long_name, fall back to card's displayed name
     var q = quotesCache[ticker];
     document.getElementById('chart-ticker').textContent = ticker;
-    document.getElementById('chart-name').textContent = q ? q.name : ticker;
+    var chartName = ticker;
+    if (q && q.long_name && q.long_name !== ticker) {
+        chartName = q.long_name;
+    } else if (q && q.name && q.name !== ticker) {
+        chartName = q.name;
+    } else if (card) {
+        var cardNameEl = card.querySelector('.truncate');
+        if (cardNameEl && cardNameEl.textContent.trim() && cardNameEl.textContent.trim() !== ticker) {
+            chartName = cardNameEl.textContent.trim();
+        }
+    }
+    document.getElementById('chart-name').textContent = chartName;
 
     // Update detail stats
     updateDetailStats(q);
@@ -436,12 +447,17 @@ function updateAllCards(quotes) {
             changeEl.className = 'mono text-[10px] ' + (q.change >= 0 ? 'text-gain' : 'text-loss');
         }
 
-        // Update company name tooltip with full long_name
+        // Update company name and tooltip with full long_name
         var card = document.getElementById('card-' + ticker);
         if (card) {
             var nameEl = card.querySelector('.truncate');
             if (nameEl) {
+                // Update tooltip
                 nameEl.setAttribute('title', q.long_name || q.name || ticker);
+                // Update visible name if API returned a real name (not just the ticker)
+                if (q.name && q.name !== ticker) {
+                    nameEl.textContent = q.name;
+                }
             }
         }
 
