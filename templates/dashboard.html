@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The One and Only Monitor</title>
+
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        surface: { 1: '#0f1117', 2: '#161922', 3: '#1c1f2e', 4: '#252836' },
+                        gain: '#22c55e',
+                        loss: '#ef4444',
+                        accent: '#3b82f6',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- TradingView Lightweight Charts -->
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        * { font-family: 'Inter', system-ui, sans-serif; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #161922; }
+        ::-webkit-scrollbar-thumb { background: #3b3f54; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4b5069; }
+
+        /* Ticker card hover glow */
+        .ticker-card { transition: all 0.15s ease; }
+        .ticker-card:hover { transform: translateY(-1px); box-shadow: 0 2px 12px rgba(59, 130, 246, 0.12); }
+        .ticker-card.active { ring: 2px solid #3b82f6; box-shadow: 0 0 0 2px #3b82f6; }
+
+        /* Price flash animation */
+        @keyframes flashGreen { 0% { background-color: rgba(34, 197, 94, 0.2); } 100% { background-color: transparent; } }
+        @keyframes flashRed { 0% { background-color: rgba(239, 68, 68, 0.2); } 100% { background-color: transparent; } }
+        .flash-green { animation: flashGreen 0.8s ease-out; }
+        .flash-red { animation: flashRed 0.8s ease-out; }
+
+        /* Search results dropdown */
+        .search-results { max-height: 320px; overflow-y: auto; }
+
+        /* Spinner */
+        .spinner { border: 2px solid #252836; border-top: 2px solid #3b82f6; border-radius: 50%;
+                   width: 16px; height: 16px; animation: spin 0.8s linear infinite; display: inline-block; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Pulse dot */
+        .pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e;
+                     animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+        /* Chart period buttons */
+        .period-btn { transition: all 0.15s; }
+        .period-btn.active { background-color: #3b82f6; color: white; }
+
+        /* Drag-and-drop */
+        .ticker-card.dragging { opacity: 0.4; transform: scale(0.95); }
+        .ticker-card.drag-over { border-color: #3b82f6 !important; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4); }
+        .drag-handle { cursor: grab; opacity: 0; transition: opacity 0.15s; }
+        .drag-handle:active { cursor: grabbing; }
+        .ticker-card:hover .drag-handle { opacity: 1; }
+    </style>
+</head>
+
+<body class="bg-surface-1 text-gray-200 min-h-screen">
+
+    <!-- ─── Header ──────────────────────────────────────────────────────── -->
+    <header class="bg-surface-2 border-b border-gray-800 sticky top-0 z-50">
+        <div class="max-w-[1600px] mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-accent rounded-lg flex items-center justify-center">
+                    <i data-lucide="activity" class="w-5 h-5 text-white"></i>
+                </div>
+                <h1 class="text-lg font-bold text-white">The One and Only Monitor</h1>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <!-- Last updated + auto-refresh -->
+                <div class="flex items-center gap-3 text-xs text-gray-400">
+                    <div class="pulse-dot" id="live-dot"></div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-gray-500">Updated:</span>
+                        <span class="mono text-gray-300" id="summary-updated">-</span>
+                        <span id="user-timezone" class="text-gray-600 text-[10px]"></span>
+                    </div>
+                    <span class="text-gray-600">|</span>
+                    <span>Next: <span id="countdown" class="mono text-gray-300">15:00</span></span>
+                </div>
+
+                <!-- Refresh button -->
+                <button onclick="refreshAll()"
+                        id="refresh-btn"
+                        class="flex items-center gap-1.5 px-3 py-1.5 bg-surface-3 hover:bg-surface-4 rounded-lg text-sm text-gray-300 hover:text-white transition">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5" id="refresh-icon"></i>
+                    Refresh
+                </button>
+
+            </div>
+        </div>
+    </header>
+
+    <!-- ─── Main Content ────────────────────────────────────────────────── -->
+    <main class="max-w-[1600px] mx-auto px-4 py-5">
+
+        <!-- ─── Tab Bar ─────────────────────────────────────────────────── -->
+        <div class="flex items-center gap-1 mb-4 overflow-x-auto pb-1" id="tab-bar">
+            {% for t in tabs %}
+            <div class="flex items-center group relative" id="tab-{{ t.id }}">
+                <button onclick="switchTab({{ t.id }})"
+                        class="tab-button px-4 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition
+                               {{ 'bg-accent text-white' if t.id == active_tab_id else 'bg-surface-3 text-gray-400 hover:text-white hover:bg-surface-4' }}"
+                        data-tab-id="{{ t.id }}">
+                    {{ t.name }}
+                </button>
+                <!-- Tab context menu trigger -->
+                <button onclick="event.stopPropagation(); showTabMenu({{ t.id }}, event)"
+                        class="w-5 h-5 flex items-center justify-center rounded text-gray-600 hover:text-gray-300 opacity-0 group-hover:opacity-100 transition -ml-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+                </button>
+            </div>
+            {% endfor %}
+
+            <!-- Add tab button -->
+            <button onclick="promptNewTab()"
+                    class="px-3 py-1.5 rounded-lg text-sm text-gray-500 hover:text-white hover:bg-surface-3 transition flex items-center gap-1 whitespace-nowrap">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                New List
+            </button>
+        </div>
+
+        <!-- Tab context menu (hidden, positioned by JS) -->
+        <div id="tab-context-menu"
+             class="fixed bg-surface-3 border border-gray-700 rounded-lg shadow-xl py-1 z-[60] min-w-[140px]"
+             style="display: none;">
+            <button onclick="renameCurrentTab()" class="w-full px-3 py-1.5 text-left text-sm text-gray-300 hover:bg-surface-4 hover:text-white flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                Rename
+            </button>
+            <button onclick="deleteCurrentTab()" class="w-full px-3 py-1.5 text-left text-sm text-loss hover:bg-red-900/20 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                Delete
+            </button>
+        </div>
+
+        <!-- Market Summary Bar -->
+        <div class="flex items-center gap-3 mb-4" id="summary-bar">
+            <div class="flex items-center gap-1.5 bg-surface-2 rounded-md px-3 py-1.5 border border-gray-800">
+                <span class="text-[10px] text-gray-500 uppercase">Watchlist</span>
+                <span class="text-sm font-bold text-white mono" id="summary-count">{{ watchlist|length }}</span>
+            </div>
+            <div class="flex items-center gap-1.5 bg-surface-2 rounded-md px-3 py-1.5 border border-gray-800">
+                <span class="text-[10px] text-gray-500 uppercase">Gainers</span>
+                <span class="text-sm font-bold text-gain mono" id="summary-gainers">-</span>
+            </div>
+            <div class="flex items-center gap-1.5 bg-surface-2 rounded-md px-3 py-1.5 border border-gray-800">
+                <span class="text-[10px] text-gray-500 uppercase">Losers</span>
+                <span class="text-sm font-bold text-loss mono" id="summary-losers">-</span>
+            </div>
+        </div>
+
+        <div class="flex gap-5 flex-col lg:flex-row">
+
+            <!-- ─── Left: Ticker Cards ────────────────────────────────── -->
+            <div class="w-full lg:w-80 xl:w-96 flex-shrink-0">
+                <div class="flex items-center justify-between mb-2">
+                    <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Watchlist</h2>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-600" id="card-count">{{ watchlist|length }} tickers</span>
+                        <button onclick="openSearchModal()"
+                                class="flex items-center gap-1 px-2 py-1 bg-accent hover:bg-blue-600 rounded-md text-xs text-white font-medium transition">
+                            <i data-lucide="plus" class="w-3 h-3"></i>
+                            Add
+                        </button>
+                    </div>
+                </div>
+                <div class="space-y-1 max-h-[calc(100vh-240px)] overflow-y-auto pr-1" id="ticker-list">
+                    {% for item in watchlist %}
+                    {% set q = quotes.get(item.ticker, {}) %}
+                    <div class="ticker-card bg-surface-2 rounded-md px-2.5 py-1.5 border border-gray-800 cursor-pointer relative group"
+                         id="card-{{ item.ticker }}"
+                         draggable="true"
+                         data-ticker="{{ item.ticker }}"
+                         onclick="selectTicker('{{ item.ticker }}')">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-1.5">
+                                <!-- Drag handle -->
+                                <div class="drag-handle flex-shrink-0 text-gray-600 hover:text-gray-400"
+                                     onmousedown="event.stopPropagation();">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                                        <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
+                                        <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+                                        <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="font-semibold text-white text-xs">{{ item.ticker }}</div>
+                                    <div class="text-[10px] text-gray-500 truncate max-w-[120px] leading-tight" title="{{ q.get('long_name', q.get('name', item.name or item.ticker)) }}">{{ q.get('name', item.name or item.ticker) }}</div>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="mono text-xs font-semibold {{ 'text-gain' if q.get('change', 0) >= 0 else 'text-loss' }}"
+                                     id="price-{{ item.ticker }}">
+                                    {{ "$%.2f"|format(q.get('price', 0)) if q else '-' }}
+                                </div>
+                                <div class="mono text-[10px] {{ 'text-gain' if q.get('change', 0) >= 0 else 'text-loss' }}"
+                                     id="change-{{ item.ticker }}">
+                                    {% if q %}
+                                        {{ "%+.2f"|format(q.get('change', 0)) }} ({{ "%+.2f"|format(q.get('change_pct', 0)) }}%)
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Extended hours line -->
+                        <div class="text-right hidden" id="ext-{{ item.ticker }}">
+                            <span class="mono text-[9px] text-gray-500" id="ext-label-{{ item.ticker }}">AH:</span>
+                            <span class="mono text-[9px]" id="ext-price-{{ item.ticker }}"></span>
+                            <span class="mono text-[9px]" id="ext-change-{{ item.ticker }}"></span>
+                        </div>
+                        <!-- Remove button -->
+                        <button onclick="event.stopPropagation(); removeTicker('{{ item.ticker }}')"
+                                class="absolute top-1 right-1 w-4 h-4 flex items-center justify-center rounded bg-surface-4 text-gray-500 hover:text-loss hover:bg-red-900/30 opacity-0 group-hover:opacity-100 transition">
+                            <i data-lucide="x" class="w-2.5 h-2.5"></i>
+                        </button>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- ─── Right: Chart Area ─────────────────────────────────── -->
+            <div class="flex-1 min-w-0">
+                <!-- Chart Header -->
+                <div class="bg-surface-2 rounded-t-lg border border-gray-800 border-b-0 px-4 py-3 flex items-center justify-between">
+                    <div>
+                        <h2 class="text-lg font-bold text-white" id="chart-ticker">SPY</h2>
+                        <span class="text-xs text-gray-500" id="chart-name">S&P 500 ETF</span>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <!-- Chart type toggle -->
+                        <div class="flex items-center gap-1 bg-surface-3 rounded-md p-0.5">
+                            <button onclick="setChartType('candlestick')" id="btn-candlestick"
+                                    class="period-btn active px-2 py-1 rounded text-xs font-medium">
+                                <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                            <button onclick="setChartType('area')" id="btn-area"
+                                    class="period-btn px-2 py-1 rounded text-xs font-medium text-gray-400 hover:text-white">
+                                <i data-lucide="trending-up" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                        <!-- Period selector -->
+                        <div class="flex items-center gap-1 bg-surface-3 rounded-md p-0.5">
+                            <button onclick="setPeriod('1d','5m')" class="period-btn px-2.5 py-1 rounded text-xs font-medium text-gray-400 hover:text-white" data-period="1d">1D</button>
+                            <button onclick="setPeriod('5d','15m')" class="period-btn px-2.5 py-1 rounded text-xs font-medium text-gray-400 hover:text-white" data-period="5d">5D</button>
+                            <button onclick="setPeriod('1mo','1d')" class="period-btn active px-2.5 py-1 rounded text-xs font-medium" data-period="1mo">1M</button>
+                            <button onclick="setPeriod('3mo','1d')" class="period-btn px-2.5 py-1 rounded text-xs font-medium text-gray-400 hover:text-white" data-period="3mo">3M</button>
+                            <button onclick="setPeriod('6mo','1d')" class="period-btn px-2.5 py-1 rounded text-xs font-medium text-gray-400 hover:text-white" data-period="6mo">6M</button>
+                            <button onclick="setPeriod('1y','1d')" class="period-btn px-2.5 py-1 rounded text-xs font-medium text-gray-400 hover:text-white" data-period="1y">1Y</button>
+                            <button onclick="setPeriod('5y','1wk')" class="period-btn px-2.5 py-1 rounded text-xs font-medium text-gray-400 hover:text-white" data-period="5y">5Y</button>
+                            <button onclick="setPeriod('10y','1mo')" class="period-btn px-2.5 py-1 rounded text-xs font-medium text-gray-400 hover:text-white" data-period="10y">10Y</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chart container -->
+                <div class="bg-surface-2 border border-gray-800 border-t-0 rounded-b-lg overflow-hidden" style="height: 500px;" id="chart-container">
+                </div>
+
+                <!-- Detail stats -->
+                <div class="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-9 gap-2 mt-4" id="detail-stats">
+                    <div class="bg-surface-2 rounded-lg px-2.5 py-2.5 border border-gray-800 overflow-hidden min-w-0">
+                        <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Open</div>
+                        <div class="mono text-xs sm:text-sm text-gray-200 truncate" id="stat-open">-</div>
+                    </div>
+                    <div class="bg-surface-2 rounded-lg px-2.5 py-2.5 border border-gray-800 overflow-hidden min-w-0">
+                        <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">High</div>
+                        <div class="mono text-xs sm:text-sm text-gray-200 truncate" id="stat-high">-</div>
+                    </div>
+                    <div class="bg-surface-2 rounded-lg px-2.5 py-2.5 border border-gray-800 overflow-hidden min-w-0">
+                        <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Low</div>
+                        <div class="mono text-xs sm:text-sm text-gray-200 truncate" id="stat-low">-</div>
+                    </div>
+                    <div class="bg-surface-2 rounded-lg px-2.5 py-2.5 border border-gray-800 overflow-hidden min-w-0">
+                        <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Prev Close</div>
+                        <div class="mono text-xs sm:text-sm text-gray-200 truncate" id="stat-prev">-</div>
+                    </div>
+                    <div class="bg-surface-2 rounded-lg px-2.5 py-2.5 border border-gray-800 overflow-hidden min-w-0">
+                        <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Volume</div>
+                        <div class="mono text-xs sm:text-sm text-gray-200 truncate" id="stat-volume">-</div>
+                    </div>
+                    <div class="bg-surface-2 rounded-lg px-2.5 py-2.5 border border-gray-800 overflow-hidden min-w-0">
+                        <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Change</div>
+                        <div class="mono text-xs sm:text-sm truncate" id="stat-change">-</div>
+                    </div>
+                    <div class="bg-surface-2 rounded-lg px-2.5 py-2.5 border border-gray-800 overflow-hidden min-w-0">
+                        <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">52W High</div>
+                        <div class="mono text-xs sm:text-sm text-gray-200 truncate" id="stat-52h">-</div>
+                    </div>
+                    <div class="bg-surface-2 rounded-lg px-2.5 py-2.5 border border-gray-800 overflow-hidden min-w-0">
+                        <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">52W Low</div>
+                        <div class="mono text-xs sm:text-sm text-gray-200 truncate" id="stat-52l">-</div>
+                    </div>
+                    <div class="bg-surface-2 rounded-lg px-2.5 py-2.5 border border-gray-800 overflow-hidden min-w-0">
+                        <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">P/E Ratio</div>
+                        <div class="mono text-xs sm:text-sm text-gray-200 truncate" id="stat-pe">-</div>
+                    </div>
+                </div>
+
+                <!-- Extended hours stats bar -->
+                <div class="hidden mt-2" id="ext-stats-bar">
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div class="bg-surface-3 rounded-lg px-2.5 py-2 border border-gray-700/50 overflow-hidden min-w-0 hidden" id="stat-pm-box">
+                            <div class="text-[10px] text-yellow-500/80 uppercase tracking-wider mb-0.5 flex items-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                                Pre-Market
+                            </div>
+                            <div class="mono text-xs sm:text-sm text-gray-200 truncate" id="stat-pm-price">-</div>
+                            <div class="mono text-[10px] truncate" id="stat-pm-change">-</div>
+                        </div>
+                        <div class="bg-surface-3 rounded-lg px-2.5 py-2 border border-gray-700/50 overflow-hidden min-w-0 hidden" id="stat-ah-box">
+                            <div class="text-[10px] text-purple-400/80 uppercase tracking-wider mb-0.5 flex items-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                                After Hours
+                            </div>
+                            <div class="mono text-xs sm:text-sm text-gray-200 truncate" id="stat-ah-price">-</div>
+                            <div class="mono text-[10px] truncate" id="stat-ah-change">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ─── Search / Add Ticker Modal ───────────────────────────────────── -->
+    <div id="search-modal"
+         class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 items-start justify-center pt-[15vh]"
+         style="display: none;">
+        <div class="bg-surface-2 rounded-xl border border-gray-700 shadow-2xl w-full max-w-md mx-4">
+            <!-- Search input -->
+            <div class="p-4 border-b border-gray-800">
+                <div class="relative">
+                    <i data-lucide="search" class="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                    <input type="text" id="search-input"
+                           placeholder="Search ticker or company name..."
+                           autocomplete="off"
+                           class="w-full bg-surface-3 border border-gray-700 rounded-lg pl-10 pr-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent">
+                    <div class="spinner absolute right-3 top-1/2 -translate-y-1/2 hidden" id="search-spinner"></div>
+                </div>
+            </div>
+            <!-- Results -->
+            <div class="search-results p-2" id="search-results">
+                <div class="text-center text-gray-500 text-sm py-8">Type to search for stocks, ETFs...</div>
+            </div>
+            <!-- Footer -->
+            <div class="p-3 border-t border-gray-800 flex justify-end">
+                <button onclick="closeSearchModal()"
+                        class="px-4 py-1.5 text-sm text-gray-400 hover:text-white transition">
+                    Close <span class="text-xs text-gray-600 ml-1">ESC</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── JavaScript ──────────────────────────────────────────────────── -->
+    <script src="/static/js/dashboard.js"></script>
+
+    <!-- Init Lucide icons -->
+    <script>lucide.createIcons();</script>
+</body>
+</html>
